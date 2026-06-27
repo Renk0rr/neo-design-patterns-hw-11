@@ -1,49 +1,40 @@
-# neo-design-patterns-hw-10
+# neo-design-patterns-hw-11
 
-Реалізовано консольний TODO-застосунок із підтримкою додавання, видалення, оновлення та виконання задач. Демонструє патерн Command.
+Design Patterns: Chain of Responsibility and Mediator
 
-1. Структура проекту
-   src/
-   ├── commands/
-   │ ├── Command.ts # Інтерфейс команди
-   │ ├── AbstractCommand.ts # Базова абстрактна команда
-   │ ├── AddTaskCommand.ts # Додавання задачі
-   │ ├── RemoveTaskCommand.ts # Видалення задачі
-   │ ├── UpdateTaskCommand.ts # Оновлення задачі
-   │ ├── CompleteTaskCommand.ts # Зміна статусу задачі
-   │ └── CommandHistory.ts # Історія команд (undo/redo)
-   ├── models/
-   │ ├── Task.ts # Модель задачі
-   │ └── TaskList.ts # Колекція задач
-   ├── services/
-   │ └── TaskManager.ts # Менеджер задач
-   └── main.ts # Точка входу
+1. Система обробки структурованих JSON-записів, що демонструє два поведінкові патерни:
+   Chain of Responsibility — ланцюги валідації та обробки даних за типом запису
+   Mediator — централізована маршрутизація та збереження результатів
 
-2. Встановлення
-   bashnpm install
+2. Архітектура патернів
 
-3. Запуск
-   Якщо шлях до проєкту без пробілів:
-   npx ts-node ./src/main.ts
+Chain of Responsibility: Для кожного типу запису (`access_log`, `transaction`, `system_error`) будується власний ланцюг обробників через `AbstractHandler`. Кожен обробник або трансформує запис і передає далі, або кидає `Error` при невалідних даних.
 
-Якщо шлях містить пробіли:
-npx tsc && node dist/main.js
+access_log: TimestampParser → UserIdValidator → IpValidator
+transaction: TimestampParser → AmountParser → CurrencyNormalizer
+system_error: TimestampParser → LevelValidator → MessageTrimmer
 
-4. Патерн Command
-   Кожна дія над задачами оформлена у вигляді окремого об'єкта-команди, що реалізує інтерфейс Command (src/commands/Command.ts) з методами execute(), undo() і redo(). Базовий абстрактний клас AbstractCommand реалізує метод redo() за замовчуванням як повторний виклик execute(), щоб не дублювати код у кожній команді.
+3. Mediator
 
-AddTaskCommand зберігає об'єкт задачі, execute() додає її до списку, undo() видаляє за id.
-RemoveTaskCommand зберігає копію задачі перед видаленням, undo() відновлює її назад.
-UpdateTaskCommand зберігає знімок старого стану задачі перед оновленням, undo() повертає старі значення.
-CompleteTaskCommand зберігає попередній статус completed, undo() повертає його назад.
+`ProcessingMediator` це єдина точка збереження. Він отримує оброблені записи через `onSuccess()` і відхилені через `onRejected()`, делегуючи запис відповідному writer-у. Файли записуються лише після виклику `finalize()`.
 
-Всі команди виконуються виключно через CommandHistory, який є єдиною точкою входу для будь-якої зміни стану.
+4. Запуск
+   npm install
+   npx ts-node src/main.ts
 
-5. Механізм undo/redo
-   CommandHistory зберігає масив виконаних команд і покажчик currentIndex на поточну позицію.
+Результати з'являться у директорії `output/`.
+Приклад:
+[INFO] Завантажено записів: 9
+[INFO] Успішно оброблено: 4
+[WARN] Відхилено з помилками: 5
+[INFO] Звіт збережено у директорії output/
 
-executeCommand() виконує команду, додає її в масив і зміщує покажчик вперед. Якщо перед цим були скасовані дії, гілка redo скидається.
-undo() викликає undo() команди за поточним індексом і зміщує покажчик назад на одну позицію.
-redo() зміщує покажчик вперед і викликає redo() наступної команди.
-
-Кожна команда перед виконанням зберігає попередній стан, що дозволяє точно відновити його при скасуванні.
+5. Як додати новий тип запису
+   Модель — додати новий інтерфейс у `src/models/DataRecord.ts` і включити його у union-тип `DataRecord`.
+   Обробники — створити потрібні handler-и у `src/chain/handlers/` (розширити `AbstractHandler`).
+   Ланцюг — створити файл у `src/chain/chains/` і зібрати ланцюг через `setNext()`.
+   Writer — створити `src/mediator/writers/MetricWriter.ts` з методами `write()` і `finalize()`.
+   Mediator — додати новий writer у `ProcessingMediator`, обробити новий тип у `switch` всередині `onSuccess()`.
+   main.ts — додати новий тип до `handlerMap`:
+   typescript
+   metric: buildMetricChain,
